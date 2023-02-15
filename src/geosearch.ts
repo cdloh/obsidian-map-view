@@ -40,7 +40,8 @@ export class GeoSearcher {
 
     async search(
         query: string,
-        searchArea: leaflet.LatLngBounds | null = null
+        searchArea: leaflet.LatLngBounds | null = null,
+        raw: boolean | null
     ): Promise<GeoSearchResult[]> {
         let results: GeoSearchResult[] = [];
 
@@ -71,12 +72,18 @@ export class GeoSearcher {
                     this.settings,
                     searchArea?.getCenter()
                 );
-                for (const result of placesResults)
-                    results.push({
+                for (const result of placesResults) {
+                    let res: GeoSearchResult = {
                         name: result.name,
                         location: result.location,
                         resultType: 'searchResult',
-                    });
+                    };
+
+                    if (raw) {
+                        res = { ...result, ...res };
+                    }
+                    results.push(res);
+                }
             } catch (e) {
                 console.log(
                     'Map View: Google Places search failed: ',
@@ -94,18 +101,38 @@ export class GeoSearcher {
                 consts.MAX_EXTERNAL_SEARCH_SUGGESTIONS
             );
             results = results.concat(
-                searchResults.map(
-                    (result) =>
-                        ({
-                            name: result.label,
-                            location: new leaflet.LatLng(result.y, result.x),
-                            resultType: 'searchResult',
-                        } as GeoSearchResult)
-                )
+                searchResults.map(function (result) {
+                    let res: GeoSearchResult = {
+                        name: result.label,
+                        location: new leaflet.LatLng(result.y, result.x),
+                        resultType: 'searchResult',
+                    };
+                    if (raw) {
+                        res = { ...result, ...res };
+                    }
+                    return res;
+                })
             );
         }
 
         return results;
+    }
+
+    async googlePlacesDetails(placeID: string): Promise<{}> {
+        if (
+            this.settings.searchProvider != 'google' ||
+            !this.settings.useGooglePlaces
+        )
+            return {};
+        const params = {
+            place_id: placeID,
+            key: this.settings.geocodingApiKey,
+        };
+        const googleUrl =
+            'https://maps.googleapis.com/maps/api/place/textsearch/json?' +
+            querystring.stringify(params);
+        const googleContent = await request({ url: googleUrl });
+        return JSON.parse(googleContent);
     }
 }
 
